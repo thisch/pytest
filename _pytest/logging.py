@@ -1,8 +1,10 @@
 from __future__ import absolute_import, division, print_function
 
+import datetime
 import logging
 from contextlib import closing, contextmanager
 import sys
+import warnings
 
 import pytest
 import py
@@ -120,6 +122,97 @@ def catching_logs(handler, formatter=None,
             yield handler
         finally:
             logger.setLevel(orig_level)
+
+
+LOGCOLORS = {
+    logging.CRITICAL: 'red',
+    logging.ERROR:  'red',
+    logging.WARNING: 'red',
+    logging.WARN:  'purple',
+    logging.INFO: 'green',
+    logging.DEBUG: 'white',
+    logging.NOTSET: 'red'
+}
+
+
+def _colorize(text, color):
+    tw = py.io.TerminalWriter()
+    tw.hasmarkup = True
+    kw = {color: True}
+    return tw.markup(text, **kw)
+
+
+class PercentStyle:
+    default_format = '%(message)s'
+    asctime_format = '%(asctime)s'
+    asctime_search = '%(asctime)'
+
+    def __init__(self, fmt):
+        self._fmt = fmt or self.default_format
+
+    def usesTime(self):
+        return self._fmt.find(self.asctime_search) >= 0
+
+    def format(self, record):
+        return self._fmt % record.__dict__
+
+
+class ColoredFormatter(logging.Formatter):
+    converter = datetime.datetime.fromtimestamp
+
+    def __init__(self, *args, **kwargs):
+        self.no_datetime = kwargs.pop('no_datetime', False)
+        self.no_date = kwargs.pop('no_date', False)
+        self.logger_name_fmt = kwargs.pop('logger_name_fmt',
+                                          '%(name)-16s')
+        super(ColoredFormatter, self).__init__(*args, **kwargs)
+
+        self.separator = '| '
+        prefix = ''
+        if not self.no_datetime:
+            if self.no_date:
+                self.datefmt = '%H:%M:%S.%f'
+            else:
+                self.datefmt = '%d %b %Y %H:%M:%S.%f'
+            prefix += '%(asctime)s '
+        if prefix:
+            prefix += '| '
+        self._colored_levels = {
+            k: _colorize('%8s' % logging.getLevelName(k), v)
+            for k, v in LOGCOLORS.items()}
+        self._fmt = (prefix +
+                     '%(colored_levelname)8s ' +
+                     self.separator +
+                     self.logger_name_fmt +
+                     self.separator +
+                     '%(message)s')
+        if sys.version_info[0] > 2:
+            self._style = PercentStyle(self._fmt)
+            self._fmt = self._style._fmt
+
+        message = 'this is a test msg'
+        lr = logging.LogRecord('name', logging.INFO,
+                               'filename', 0,
+                               message,
+                               None, None)
+        lr.colored_levelname = 'INFO'
+        tmplogstr = logging.Formatter.format(self, lr)
+        self.hlen = (
+            tmplogstr.find(message) -
+            len(self.separator))
+
+    def formatTime(self, record, datefmt=None):
+        ct = self.converter(record.created)
+        return ct.strftime(datefmt)[:-3]  # only show milliseconds
+
+    def format(self, record):
+        record.colored_levelname = self._colored_levels.get(
+            record.levelno, 'unknown')
+        logstr = logging.Formatter.format(self, record)
+        logstr = logstr.replace(
+            '\n',
+            '\n' + ' ' * self.hlen + self.separator)
+        return logstr
 
 
 class LogCaptureHandler(logging.StreamHandler):
@@ -276,9 +369,12 @@ class LoggingPlugin(object):
         if not log_cli_date_format:
             # No CLI specific date format was provided, use log_date_format
             log_cli_date_format = get_option_ini(config, 'log_date_format')
-        log_cli_formatter = logging.Formatter(
-                log_cli_format,
-                datefmt=log_cli_date_format)
+        # log_cli_formatter = logging.Formatter(
+        #         log_cli_format,
+        #         datefmt=log_cli_date_format)
+        log_cli_formatter = ColoredFormatter(
+            log_cli_format,
+            datefmt=log_cli_date_format)
         self.log_cli_handler = log_cli_handler  # needed for a single unittest
         self.live_logs = catching_logs(log_cli_handler,
                                        formatter=log_cli_formatter,
