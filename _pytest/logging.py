@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import datetime
 import logging
 from contextlib import closing, contextmanager
 import sys
@@ -62,6 +63,11 @@ def pytest_addoption(parser):
         dest='log_cli_date_format', default=None,
         help='log date format as used by the logging module.')
     add_option_ini(
+        '--log-cli-colored',
+        dest='log_cli_colored', action='store_const',
+        const=True, default=False, type='bool',
+        help='enable colored log ouput.')
+    add_option_ini(
         '--log-file',
         dest='log_file', default=None,
         help='path to a file when logging will be written to.')
@@ -113,6 +119,76 @@ def catching_logs(handler, formatter=None,
             yield handler
         finally:
             logger.setLevel(orig_level)
+
+
+LOGLEVEL_COLORS = {
+    logging.CRITICAL: 'red',
+    logging.ERROR:  'red',
+    logging.WARNING: 'red',
+    logging.WARN:  'purple',
+    logging.INFO: 'green',
+    logging.DEBUG: 'white',
+    logging.NOTSET: 'red'
+}
+
+
+def _colorize(text, color):
+    tw = py.io.TerminalWriter()
+    tw.hasmarkup = True
+    kw = {color: True}
+    return tw.markup(text, **kw)
+
+
+class ColoredMultiLineFormatter(logging.Formatter):
+    converter = datetime.datetime.fromtimestamp
+
+    def __init__(self, *args, **kwargs):
+        self.logger_name_fmt = kwargs.pop('logger_name_fmt',
+                                          '%(name)-16s')
+        super(ColoredMultiLineFormatter, self).__init__(*args, **kwargs)
+
+        self.separator = '| '
+        self.datefmt = '%H:%M:%S.%f'
+        self._colored_levels = {
+            k: _colorize('%8s' % logging.getLevelName(k), v)
+            for k, v in LOGLEVEL_COLORS.items()}
+        self._fmt = ('%(asctime)s ' +
+                     self.logger_name_fmt +
+                     self.separator +
+                     '%(colored_levelname)8s ' +
+                     self.separator +
+                     '%(message)s')
+        try:
+            from logging import PercentStyle
+            self._style = PercentStyle(self._fmt)
+            self._fmt = self._style._fmt
+        except ImportError:  # python < 3
+            pass
+
+        # determine the padding for multiline log strings
+        message = 'this is a test msg'
+        lr = logging.LogRecord('name', logging.INFO,
+                               'filename', 0,
+                               message,
+                               None, None)
+        lr.colored_levelname = 'INFO'
+        tmplogstr = logging.Formatter.format(self, lr)
+        self.hlen = (
+            tmplogstr.find(message) -
+            len(self.separator))
+
+    def formatTime(self, record, datefmt=None):
+        ct = self.converter(record.created)
+        return ct.strftime(datefmt)[:-3]  # only show milliseconds
+
+    def format(self, record):
+        record.colored_levelname = self._colored_levels.get(
+            record.levelno, 'unknown')
+        logstr = logging.Formatter.format(self, record)
+        logstr = logstr.replace(
+            '\n',
+            '\n' + ' ' * self.hlen + self.separator)
+        return logstr
 
 
 class LogCaptureHandler(logging.StreamHandler):
@@ -268,7 +344,13 @@ class LoggingPlugin(object):
             config, 'log_cli_format', 'log_format')
         log_cli_date_format = get_option_ini(
             config, 'log_cli_date_format', 'log_date_format')
-        log_cli_formatter = logging.Formatter(
+
+        if get_option_ini(config, 'log_cli_colored'):
+            log_cli_formatter = ColoredMultiLineFormatter(
+                log_cli_format,
+                datefmt=log_cli_date_format)
+        else:
+            log_cli_formatter = logging.Formatter(
                 log_cli_format,
                 datefmt=log_cli_date_format)
         self.log_cli_handler = log_cli_handler  # needed for a single unittest
