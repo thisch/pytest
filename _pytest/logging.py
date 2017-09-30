@@ -123,9 +123,9 @@ def catching_logs(handler, formatter=None,
 
 LOGLEVEL_COLORS = {
     logging.CRITICAL: 'red',
-    logging.ERROR:  'red',
+    logging.ERROR: 'red',
     logging.WARNING: 'red',
-    logging.WARN:  'purple',
+    logging.WARN: 'purple',
     logging.INFO: 'green',
     logging.DEBUG: 'white',
     logging.NOTSET: 'red'
