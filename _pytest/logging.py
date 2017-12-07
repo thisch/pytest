@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 from contextlib import closing, contextmanager
-import sys
 import six
 
 import pytest
@@ -250,7 +249,6 @@ class LoggingPlugin(object):
             get_option_ini(config, 'log_format'),
             get_option_ini(config, 'log_date_format'))
 
-        log_cli_handler = logging.StreamHandler(sys.stderr)
         log_cli_format = get_option_ini(
             config, 'log_cli_format', 'log_format')
         log_cli_date_format = get_option_ini(
@@ -258,10 +256,7 @@ class LoggingPlugin(object):
         log_cli_formatter = logging.Formatter(
             log_cli_format,
             datefmt=log_cli_date_format)
-        self.log_cli_handler = log_cli_handler  # needed for a single unittest
-        self.live_logs = catching_logs(log_cli_handler,
-                                       formatter=log_cli_formatter,
-                                       level=self.log_cli_level)
+        self.log_cli_formatter = log_cli_formatter
 
         log_file = get_option_ini(config, 'log_file')
         if log_file:
@@ -317,9 +312,14 @@ class LoggingPlugin(object):
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtestloop(self, session):
         """Runs all collected test items."""
-        with self.live_logs:
+
+        # live logging
+        with catching_logs(logging.StreamHandler(six.StringIO()),
+                           formatter=self.log_cli_formatter,
+                           level=self.log_cli_level):
             if self.log_file_handler is not None:
                 with closing(self.log_file_handler):
+                    # logging to a file
                     with catching_logs(self.log_file_handler,
                                        level=self.log_file_level):
                         yield  # run all the tests
