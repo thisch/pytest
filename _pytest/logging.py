@@ -1,15 +1,66 @@
 from __future__ import absolute_import, division, print_function
 
-import logging
 from contextlib import closing, contextmanager
+import logging
+import re
 import six
 
 import pytest
 import py
 
+LOGLEVEL_COLOROPTS = {
+    logging.CRITICAL: {'red'},
+    logging.ERROR: {'red', 'bold'},
+    logging.WARNING: {'yellow'},
+    logging.WARN: {'yellow'},
+    logging.INFO: {'green'},
+    logging.DEBUG: {'purple'},
+    logging.NOTSET: set(),
+}
 
-DEFAULT_LOG_FORMAT = '%(filename)-25s %(lineno)4d %(levelname)-8s %(message)s'
+
+DEFAULT_LOG_FORMAT = ("[%(asctime)s.%(msecs)03d] %(name)-10s "
+                      "| %(levelname)-8s | %(message)s")
 DEFAULT_LOG_DATE_FORMAT = '%H:%M:%S'
+
+# move to __init__ of ColoredLevelFormatter?
+LEVELNAME_FMT_REGEX = re.compile(r'%\(levelname\)([+-]?\d*s)')
+
+
+class ColoredLevelFormatter(logging.Formatter):
+    """
+    Colorize the %(levelname)..s part of the log format passed to __init__.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(ColoredLevelFormatter, self).__init__(
+            *args, **kwargs)
+        self._original_fmt = self._fmt
+        self._level_to_fmt_mapping = {}
+
+        levelname_fmt_match = LEVELNAME_FMT_REGEX.search(self._fmt)
+        if not levelname_fmt_match:
+            return
+        levelname_fmt = levelname_fmt_match.group()
+
+        tw = py.io.TerminalWriter()
+
+        for level, color_opts in LOGLEVEL_COLOROPTS.items():
+            formatted_levelname = levelname_fmt % {
+                'levelname': logging.getLevelName(level)}
+
+            # add ANSI escape sequences around the formatted levelname
+            color_kwargs = {name: True for name in color_opts}
+            colorized_formatted_levelname = tw.markup(
+                formatted_levelname, **color_kwargs)
+            self._level_to_fmt_mapping[level] = LEVELNAME_FMT_REGEX.sub(
+                colorized_formatted_levelname,
+                self._fmt)
+
+    def format(self, record):
+        self._fmt = self._level_to_fmt_mapping.get(
+            record.levelno, self._original_fmt)
+        return super(ColoredLevelFormatter, self).format(record)
 
 
 def get_option_ini(config, *names):
@@ -365,7 +416,10 @@ class LoggingPlugin(object):
             log_cli_handler = _LiveLoggingStreamHandler(terminal_reporter, capture_manager)
             log_cli_format = get_option_ini(self._config, 'log_cli_format', 'log_format')
             log_cli_date_format = get_option_ini(self._config, 'log_cli_date_format', 'log_date_format')
-            log_cli_formatter = logging.Formatter(log_cli_format, datefmt=log_cli_date_format)
+            if LEVELNAME_FMT_REGEX.search(log_cli_format):
+                log_cli_formatter = ColoredLevelFormatter(log_cli_format, datefmt=log_cli_date_format)
+            else:
+                log_cli_formatter = logging.Formatter(log_cli_format, datefmt=log_cli_date_format)
             log_cli_level = get_actual_log_level(self._config, 'log_cli_level', 'log_level')
             self.log_cli_handler = log_cli_handler
             self.live_logs_context = catching_logs(log_cli_handler, formatter=log_cli_formatter, level=log_cli_level)
