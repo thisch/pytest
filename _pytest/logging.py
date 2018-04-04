@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 from contextlib import closing, contextmanager
+import copy
 import re
 import six
 
@@ -34,10 +35,6 @@ class ColoredLevelFormatter(logging.Formatter):
     def __init__(self, terminalwriter, *args, **kwargs):
         super(ColoredLevelFormatter, self).__init__(
             *args, **kwargs)
-        if six.PY2:
-            self._original_fmt = self._fmt
-        else:
-            self._original_fmt = self._style._fmt
         self._level_to_fmt_mapping = {}
 
         levelname_fmt_match = self.LEVELNAME_FMT_REGEX.search(self._fmt)
@@ -57,14 +54,26 @@ class ColoredLevelFormatter(logging.Formatter):
                 colorized_formatted_levelname,
                 self._fmt)
 
-    def format(self, record):
+    # only python3
+    def formatMessage(self, record):
         fmt = self._level_to_fmt_mapping.get(
-            record.levelno, self._original_fmt)
-        if six.PY2:
-            self._fmt = fmt
-        else:
-            self._style._fmt = fmt
-        return super(ColoredLevelFormatter, self).format(record)
+            record.levelno, self._fmt)
+
+        msg = record.message
+        rdict = record.__dict__
+        if '\n' in msg:
+            # TODO right aligned msg?
+            # TODO hlen input param
+
+            rdict = copy.copy(rdict)
+            rdict['message'] = 'MARKER'
+            logstr = self._fmt % rdict
+            hlen = logstr.find('MARKER')
+            rdict['message'] = msg.replace(
+                '\n',
+                '\n' + ' ' * hlen)
+
+        return fmt % rdict  #
 
 
 def get_option_ini(config, *names):
