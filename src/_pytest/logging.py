@@ -4,6 +4,7 @@ from __future__ import division
 from __future__ import print_function
 
 import logging
+import os
 import re
 from contextlib import contextmanager
 
@@ -399,22 +400,21 @@ class LoggingPlugin(object):
         )
         self.log_level = get_actual_log_level(config, "log_level")
 
+        self.log_file_format = get_option_ini(config, "log_file_format", "log_format")
+        self.log_file_date_format = get_option_ini(
+            config, "log_file_date_format", "log_date_format"
+        )
+        self.log_file_level = get_actual_log_level(config, "log_file_level")
+        self.log_file_formatter = logging.Formatter(
+            self.log_file_format, datefmt=self.log_file_date_format
+        )
+
         log_file = get_option_ini(config, "log_file")
         if log_file:
-            self.log_file_level = get_actual_log_level(config, "log_file_level")
-
-            log_file_format = get_option_ini(config, "log_file_format", "log_format")
-            log_file_date_format = get_option_ini(
-                config, "log_file_date_format", "log_date_format"
-            )
-            # Each pytest runtests session will write to a clean logfile
             self.log_file_handler = logging.FileHandler(
                 log_file, mode="w", encoding="UTF-8"
             )
-            log_file_formatter = logging.Formatter(
-                log_file_format, datefmt=log_file_date_format
-            )
-            self.log_file_handler.setFormatter(log_file_formatter)
+            self.log_file_handler.setFormatter(self.log_file_formatter)
         else:
             self.log_file_handler = None
 
@@ -469,6 +469,13 @@ class LoggingPlugin(object):
         # live_logs_context can otherwise not be entered multiple times due
         # to limitations of contextlib.contextmanager
 
+    def set_log_filename(self, fname):
+        if not os.path.exists(os.path.dirname(fname)):
+            os.makedirs(os.path.dirname(fname))
+
+        self.log_file_handler = logging.FileHandler(fname, mode="w", encoding="UTF-8")
+        self.log_file_handler.setFormatter(self.log_file_formatter)
+
     def _log_cli_enabled(self):
         """Return True if log_cli should be considered enabled, either explicitly
         or because --log-cli-level was given in the command-line.
@@ -491,6 +498,15 @@ class LoggingPlugin(object):
 
     @contextmanager
     def _runtest_for(self, item, when):
+        with self._runtest_for_main(item, when):
+            if self.log_file_handler is not None:
+                with catching_logs(self.log_file_handler, level=self.log_file_level):
+                    yield
+            else:
+                yield
+
+    @contextmanager
+    def _runtest_for_main(self, item, when):
         """Implements the internals of pytest_runtest_xxx() hook."""
         with catching_logs(
             LogCaptureHandler(), formatter=self.formatter, level=self.log_level
