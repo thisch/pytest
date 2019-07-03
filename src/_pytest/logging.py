@@ -25,13 +25,13 @@ class ColoredLevelFormatter(logging.Formatter):
     """
 
     LOGLEVEL_COLOROPTS = {
-        logging.CRITICAL: {"red"},
-        logging.ERROR: {"red", "bold"},
-        logging.WARNING: {"yellow"},
-        logging.WARN: {"yellow"},
-        logging.INFO: {"green"},
-        logging.DEBUG: {"purple"},
-        logging.NOTSET: set(),
+        logging.CRITICAL: {"red": True},
+        logging.ERROR: {"bold": True},
+        logging.WARNING: {"yellow": True},
+        logging.WARN: {"yellow": True},
+        logging.INFO: {"green": True},
+        logging.DEBUG: {"purple": True},
+        logging.NOTSET: {},
     }
     LEVELNAME_FMT_REGEX = re.compile(r"%\(levelname\)([+-.]?\d*s)")
 
@@ -45,13 +45,12 @@ class ColoredLevelFormatter(logging.Formatter):
             return
         levelname_fmt = levelname_fmt_match.group()
 
-        for level, color_opts in self.LOGLEVEL_COLOROPTS.items():
+        for level, color_kwargs in self.LOGLEVEL_COLOROPTS.items():
             formatted_levelname = levelname_fmt % {
                 "levelname": logging.getLevelName(level)
             }
 
             # add ANSI escape sequences around the formatted levelname
-            color_kwargs = {name: True for name in color_opts}
             colorized_formatted_levelname = terminalwriter.markup(
                 formatted_levelname, **color_kwargs
             )
