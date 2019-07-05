@@ -119,6 +119,12 @@ def pytest_addoption(parser):
         type="bool",
         help="disable printing caught logs on failed tests.",
     )
+    parser.addini(
+        "log_disable_multiline",
+        default=False,
+        type="bool",
+        help='enable log display during test run (also known as "live logging").',
+    )
     add_option_ini(
         "--log-level",
         dest="log_level",
@@ -409,6 +415,8 @@ class LoggingPlugin:
         self._config = config
 
         self.print_logs = get_option_ini(config, "log_print")
+        self.enable_multiline = not config.getini("log_disable_multiline")
+
         self.formatter = self._create_formatter(
             get_option_ini(config, "log_format"),
             get_option_ini(config, "log_date_format"),
@@ -455,7 +463,8 @@ class LoggingPlugin:
         else:
             formatter = logging.Formatter(log_format, log_date_format)
 
-        formatter._style = PercentStyleMultiline(formatter._style._fmt)
+        if self.enable_multiline:
+            formatter._style = PercentStyleMultiline(formatter._style._fmt)
         return formatter
 
     def _setup_cli_logging(self):
