@@ -285,13 +285,10 @@ def catching_logs(handler, formatter=None, level=None):
     if add_new_handler:
         root_logger.addHandler(handler)
     if level is not None:
-        orig_level = root_logger.level
-        root_logger.setLevel(min(orig_level, level))
+        root_logger.setLevel(logging.NOTSET)
     try:
         yield handler
     finally:
-        if level is not None:
-            root_logger.setLevel(orig_level)
         if add_new_handler:
             root_logger.removeHandler(handler)
 
