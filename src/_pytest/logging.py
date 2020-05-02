@@ -396,9 +396,12 @@ class LogCaptureFixture:
         """Reset the list of log records and the captured log text."""
         self.handler.reset()
 
-    def set_handler_level(self, level):
+    def set_handler_level(self, level, when: str='call'):
         """TODO docstring"""
-        self.handler.setLevel(level)
+        try:
+            self._item.catch_log_handlers[when].setLevel(level)
+        except KeyError:
+            raise KeyError("handler for stage '{}' not yet set".format(when))
 
     def set_level(self, level, logger=None):
         """Sets the level for capturing of logs. The level will be restored to its previous value at the end of
@@ -424,6 +427,20 @@ class LogCaptureFixture:
         # save the original log-level to restore it during teardown
         self._initial_log_levels.setdefault(logger_name, logger.level)
         logger.setLevel(level)
+
+    @contextmanager
+    def at_handler_level(self, level):
+        """Context manager that sets the level for capturing of logs. After the end of the 'with' statement the
+        level is restored to its original value.
+
+        :param int level: the logger to level.
+        """
+        orig_level = self.handler.level
+        self.handler.setLevel(level)
+        try:
+            yield
+        finally:
+            self.handler.setLevel(orig_level)
 
     @contextmanager
     def at_level(self, level, logger=None):

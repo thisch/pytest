@@ -12,7 +12,7 @@ def test_fixture_help(testdir):
 
 
 def test_change_level(caplog):
-    caplog.set_level(logging.INFO)
+    caplog.set_handler_level(logging.INFO)
     logger.debug("handler DEBUG level")
     logger.info("handler INFO level")
 
@@ -52,7 +52,7 @@ def test_change_level_undo(testdir):
 
 
 def test_with_statement(caplog):
-    with caplog.at_level(logging.INFO):
+    with caplog.at_handler_level(logging.INFO):
         logger.debug("handler DEBUG level")
         logger.info("handler INFO level")
 
@@ -67,7 +67,7 @@ def test_with_statement(caplog):
 
 
 def test_log_access(caplog):
-    caplog.set_level(logging.INFO)
+    caplog.set_handler_level(logging.INFO)
     logger.info("boo %s", "arg")
     assert caplog.records[0].levelname == "INFO"
     assert caplog.records[0].msg == "boo %s"
@@ -75,7 +75,7 @@ def test_log_access(caplog):
 
 
 def test_messages(caplog):
-    caplog.set_level(logging.INFO)
+    caplog.set_handler_level(logging.INFO)
     logger.info("boo %s", "arg")
     logger.info("bar %s\nbaz %s", "arg1", "arg2")
     assert "boo arg" == caplog.messages[0]
@@ -96,14 +96,14 @@ def test_messages(caplog):
 
 
 def test_record_tuples(caplog):
-    caplog.set_level(logging.INFO)
+    caplog.set_handler_level(logging.INFO)
     logger.info("boo %s", "arg")
 
     assert caplog.record_tuples == [(__name__, logging.INFO, "boo arg")]
 
 
 def test_unicode(caplog):
-    caplog.set_level(logging.INFO)
+    caplog.set_handler_level(logging.INFO)
     logger.info("bū")
     assert caplog.records[0].levelname == "INFO"
     assert caplog.records[0].msg == "bū"
@@ -111,7 +111,7 @@ def test_unicode(caplog):
 
 
 def test_clear(caplog):
-    caplog.set_level(logging.INFO)
+    caplog.set_handler_level(logging.INFO)
     logger.info("bū")
     assert len(caplog.records)
     assert caplog.text
@@ -122,14 +122,18 @@ def test_clear(caplog):
 
 @pytest.fixture
 def logging_during_setup_and_teardown(caplog):
-    caplog.set_level("INFO")
+    caplog.set_handler_level("INFO", when='setup')
     logger.info("a_setup_log")
     yield
+    # now, we may miss a couple of teardown logs, that are output before hte
+    # following line
+    caplog.set_handler_level("INFO", when='teardown')
     logger.info("a_teardown_log")
     assert [x.message for x in caplog.get_records("teardown")] == ["a_teardown_log"]
 
 
 def test_caplog_captures_for_all_stages(caplog, logging_during_setup_and_teardown):
+    caplog.set_handler_level("INFO", when='call')
     assert not caplog.records
     assert not caplog.get_records("call")
     logger.info("a_call_log")
