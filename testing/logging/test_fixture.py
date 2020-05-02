@@ -33,14 +33,16 @@ def test_change_level_undo(testdir):
         import logging
 
         def test1(caplog):
-            caplog.set_level(logging.INFO)
+            caplog.set_handler_level(logging.INFO)
             # using + operator here so fnmatch_lines doesn't match the code in the traceback
             logging.info('log from ' + 'test1')
+            assert caplog.records
             assert 0
 
         def test2(caplog):
             # using + operator here so fnmatch_lines doesn't match the code in the traceback
             logging.info('log from ' + 'test2')
+            assert not caplog.records
             assert 0
     """
     )

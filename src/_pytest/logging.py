@@ -399,6 +399,10 @@ class LogCaptureFixture:
         """Reset the list of log records and the captured log text."""
         self.handler.reset()
 
+    def set_handler_level(self, level):
+        """TODO docstring"""
+        self.handler.setLevel(level)
+
     def set_level(self, level, logger=None):
         """Sets the level for capturing of logs. The level will be restored to its previous value at the end of
         the test.
@@ -410,6 +414,14 @@ class LogCaptureFixture:
             The levels of the loggers changed by this function will be restored to their initial values at the
             end of the test.
         """
+        # TODO This function should not be used with the root logger,
+        # because it is an important logger that may have a negative impact
+        # on the parts of pytest's logging plugin.
+
+        # how is it possible then to disable logs at the root level bug
+        # enable logs at a lower level?  -> The method can still be used to
+        # set the level of the root level logger, but we don't guarantee
+        # that everything works.
         logger_name = logger
         logger = logging.getLogger(logger_name)
         # save the original log-level to restore it during teardown
