@@ -450,7 +450,7 @@ def caplog(request):
     result._finalize()
 
 
-def get_log_level_for_setting(config: Config, *setting_names: str) -> Optional[int]:
+def get_log_level_for_setting(config: Config, *setting_names: str) -> int:
     for setting_name in setting_names:
         log_level = config.getoption(setting_name)
         if log_level is None:
@@ -458,7 +458,7 @@ def get_log_level_for_setting(config: Config, *setting_names: str) -> Optional[i
         if log_level:
             break
     else:
-        return None
+        return logging.WARNING
 
     if isinstance(log_level, str):
         log_level = log_level.upper()
