@@ -261,7 +261,7 @@ def test_log_cli_default_level(testdir):
         import logging
         def test_log_cli(request):
             plugin = request.config.pluginmanager.getplugin('logging-plugin')
-            assert plugin.log_cli_handler.level == logging.NOTSET
+            assert plugin.log_cli_handler.level == logging.WARNING
             logging.getLogger('catchlog').info("INFO message won't be shown")
             logging.getLogger('catchlog').warning("WARNING message will be shown")
     """
@@ -275,13 +275,13 @@ def test_log_cli_default_level(testdir):
 
     result = testdir.runpytest()
 
-    # fnmatch_lines does an assertion internally
     result.stdout.fnmatch_lines(
         [
             "test_log_cli_default_level.py::test_log_cli ",
             "WARNING*test_log_cli_default_level.py* message will be shown*",
         ]
     )
+    # since the default log level for cli logging is set to WARNING
     result.stdout.no_fnmatch_line("*INFO message won't be shown*")
     # make sure that that we get a '0' exit code for the testsuite
     assert result.ret == 0
@@ -735,12 +735,12 @@ def test_log_file_cli_level(testdir):
         assert "This log message won't be shown" not in contents
 
 
-def test_log_level_not_changed_by_default(testdir):
+def test_log_level_changed_to_notset_by_default(testdir):
     testdir.makepyfile(
         """
         import logging
         def test_log_file():
-            assert logging.getLogger().level == logging.WARNING
+            assert logging.getLogger().level == logging.NOTSET
     """
     )
     result = testdir.runpytest("-s")
@@ -1022,12 +1022,20 @@ def test_log_in_hooks(testdir):
     """
     )
     result = testdir.runpytest()
-    result.stdout.fnmatch_lines(["*sessionstart*", "*runtestloop*", "*sessionfinish*"])
+    assert result.ret == 5  # no tests collected
+    # they are not logged to STDOUT, because the cli log level was not specified
+    result.stdout.no_fnmatch_line("*sessionstart*")
+    result.stdout.no_fnmatch_line("*runtestloop*")
+    result.stdout.no_fnmatch_line("*sessionfinish*")
     with open(log_file) as rfh:
         contents = rfh.read()
         assert "sessionstart" in contents
         assert "runtestloop" in contents
         assert "sessionfinish" in contents
+
+    result = testdir.runpytest('--log-cli-level=INFO')
+    assert result.ret == 5  # no tests collected
+    result.stdout.fnmatch_lines(["*sessionstart*","*runtestloop*","*sessionfinish*"])
 
 
 def test_log_in_runtest_logreport(testdir):
