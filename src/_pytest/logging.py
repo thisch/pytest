@@ -284,7 +284,13 @@ def catching_logs(handler, formatter=None, level=None):
 
     if add_new_handler:
         root_logger.addHandler(handler)
+
+    # TODO we should add to the pytest docs that logging settings on the cmd line must not break tests (e.g. caplog must not depend on the settings passed to the cli)
+
     if level is not None:
+        # DO tests break if we set the level always to NOTSET?
+        # -> yes, some break, because e.g. the default log level of the log_cli_handler is NOTSET, which means that it inherits the log-level of the root logger.  Do we want this? No, fix this.
+
         root_logger.setLevel(logging.NOTSET)
     try:
         yield handler
@@ -317,6 +323,11 @@ class LogCaptureFixture:
     def __init__(self, item) -> None:
         """Creates a new funcarg."""
         self._item = item
+        # TODO default level?
+        # TODO add this to which logger? when should this be added?
+        # TODO what if we add it at the first call to set/at_logger, which would mean that we don't have any logs before that.
+        # TODO which formatter should be used for self.handler? Any specific one?
+        # self.handler = LogCaptureHandler()
         # dict of log name -> log level
         self._initial_log_levels = {}  # type: Dict[str, int]
 
