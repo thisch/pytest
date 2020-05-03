@@ -53,8 +53,3 @@ notifications:
     skip_join: true
   email:
     - pytest-commit@python.org
-
-branches:
-  only:
-    - master
-    - /^\d+\.\d+\.x$/
