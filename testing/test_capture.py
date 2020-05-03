@@ -1398,7 +1398,7 @@ def test_global_capture_with_live_logging(testdir):
             print("end test")
         """
     )
-    result = testdir.runpytest_subprocess("--log-cli-level=INFO")
+    result = testdir.runpytest_subprocess("--log-level=INFO", "--log-cli-level=INFO")
     assert result.ret == 0
 
     with open("caplog", "r") as f:
